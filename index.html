@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Payment Batch Splitter</title>
+<style>
+  :root {
+    --accent: #7a1f2b;
+    --accent-light: #a8283a;
+    --bg: #f6f5f3;
+    --panel: #ffffff;
+    --border: #e2e0dc;
+    --text: #2a2a2a;
+    --muted: #6b6b6b;
+    --warn-bg: #fff6e0;
+    --warn-border: #e8c468;
+    --ok: #2f7d4f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .container {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 32px 20px 60px;
+  }
+  header {
+    margin-bottom: 24px;
+  }
+  header h1 {
+    font-size: 24px;
+    margin: 0 0 6px;
+    color: var(--accent);
+  }
+  header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .privacy-note {
+    background: #eef6ef;
+    border: 1px solid #cbe4cf;
+    color: #24552f;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-top: 14px;
+  }
+  #dropzone {
+    margin-top: 24px;
+    border: 2px dashed #c9b7ba;
+    border-radius: 12px;
+    background: var(--panel);
+    padding: 48px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  #dropzone.dragover {
+    border-color: var(--accent);
+    background: #fbf1f2;
+  }
+  #dropzone .icon {
+    font-size: 40px;
+    margin-bottom: 10px;
+  }
+  #dropzone .main-text {
+    font-size: 16px;
+    font-weight: 600;
+  }
+  #dropzone .sub-text {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  #fileName {
+    margin-top: 10px;
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  #progressWrap {
+    margin-top: 24px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  #progressStatus {
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+  #progressBarOuter {
+    background: #eee;
+    border-radius: 6px;
+    height: 10px;
+    overflow: hidden;
+  }
+  #progressBarInner {
+    background: var(--accent);
+    height: 100%;
+    width: 0%;
+    transition: width .2s;
+  }
+  #resultsWrap {
+    margin-top: 24px;
+  }
+  .summary-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .summary-bar .stats {
+    font-size: 14px;
+  }
+  .summary-bar .stats strong { color: var(--accent); }
+  .btn {
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    color: white;
+    background: var(--accent);
+  }
+  .btn:hover { background: var(--accent-light); }
+  .btn.secondary {
+    background: #e9e6e2;
+    color: var(--text);
+  }
+  .btn.secondary:hover { background: #ddd9d3; }
+  .btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+  }
+  .btn.small {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  table#resultsTable {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table#resultsTable th, table#resultsTable td {
+    padding: 10px 12px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: middle;
+  }
+  table#resultsTable th {
+    background: #f1eeea;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: .03em;
+  }
+  table#resultsTable tr:last-child td { border-bottom: none; }
+  tr.needs-review td { background: var(--warn-bg); }
+  .page-num {
+    color: var(--muted);
+    width: 48px;
+  }
+  input.name-input, input.amount-input {
+    width: 100%;
+    padding: 6px 8px;
+    font-size: 13px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: inherit;
+  }
+  input.amount-input { text-align: right; }
+  tr.needs-review input.name-input, tr.needs-review input.amount-input {
+    border-color: var(--warn-border);
+  }
+  .flag {
+    font-size: 11px;
+    color: #8a6d1d;
+    white-space: nowrap;
+  }
+  .flag-ok {
+    font-size: 11px;
+    color: var(--ok);
+  }
+  td.dl-col { width: 90px; text-align: right; }
+  td.amount-col { width: 110px; }
+  .filename-preview {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 3px;
+    word-break: break-all;
+  }
+  footer {
+    margin-top: 40px;
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+  }
+  #errorBox {
+    margin-top: 20px;
+    background: #fdeceb;
+    border: 1px solid #f2b8b4;
+    color: #8a2a24;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Payment Batch Splitter</h1>
+    <p>Drop in a bank payment batch PDF (e.g. a Kotak NEFT/RTGS advice batch) and this tool splits it into one PDF per beneficiary, named "Beneficiary Name_Amount Paid.pdf" using the details on each voucher.</p>
+    <div class="privacy-note">🔒 Everything runs locally in this browser tab. Your file is never uploaded to any server — splitting and name extraction all happen on your own device.</div>
+  </header>
+
+  <div id="dropzone">
+    <div class="icon">📄</div>
+    <div class="main-text">Drop your payment batch PDF here, or click to choose a file</div>
+    <div class="sub-text">Works best with one beneficiary voucher per page (standard Kotak CMS/VPAY format)</div>
+    <div id="fileName"></div>
+  </div>
+  <input type="file" id="fileInput" accept="application/pdf" hidden>
+
+  <div id="progressWrap" hidden>
+    <div id="progressStatus">Working…</div>
+    <div id="progressBarOuter"><div id="progressBarInner"></div></div>
+  </div>
+
+  <div id="errorBox" hidden></div>
+
+  <div id="resultsWrap" hidden>
+    <div class="summary-bar">
+      <div class="stats" id="statsText"></div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn secondary" id="resetBtn">Start over</button>
+        <button class="btn" id="downloadZipBtn">Download all as ZIP</button>
+      </div>
+    </div>
+    <table id="resultsTable">
+      <thead>
+        <tr>
+          <th>Page</th>
+          <th>Beneficiary name (edit if needed)</th>
+          <th class="amount-col">Amount paid</th>
+          <th></th>
+          <th class="dl-col">File</th>
+        </tr>
+      </thead>
+      <tbody id="resultsBody"></tbody>
+    </table>
+  </div>
+
+  <footer>Runs 100% client-side. No data leaves your browser. Review the names before relying on the split files for payment records.</footer>
+</div>
+
+<!-- PDF.js for reading text out of each page -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<!-- pdf-lib for splitting the PDF into single pages -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<!-- JSZip + FileSaver for bundling / downloading -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const fileNameEl = document.getElementById('fileName');
+const progressWrap = document.getElementById('progressWrap');
+const progressStatus = document.getElementById('progressStatus');
+const progressBarInner = document.getElementById('progressBarInner');
+const resultsWrap = document.getElementById('resultsWrap');
+const resultsBody = document.getElementById('resultsBody');
+const statsText = document.getElementById('statsText');
+const downloadZipBtn = document.getElementById('downloadZipBtn');
+const resetBtn = document.getElementById('resetBtn');
+const errorBox = document.getElementById('errorBox');
+
+let fileBytesStore = []; // { page, bytes (Uint8Array of single-page pdf), extractedName, needsReview }
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  if (e.dataTransfer.files && e.dataTransfer.files.length) {
+    handleFile(e.dataTransfer.files[0]);
+  }
+});
+fileInput.addEventListener('change', (e) => {
+  if (e.target.files && e.target.files.length) handleFile(e.target.files[0]);
+});
+resetBtn.addEventListener('click', () => location.reload());
+
+function showError(msg) {
+  errorBox.hidden = false;
+  errorBox.textContent = msg;
+}
+
+function setProgress(pct, statusText) {
+  progressBarInner.style.width = pct + '%';
+  if (statusText) progressStatus.textContent = statusText;
+}
+
+// Groups pdf.js text items into visual rows (by y position) and sorts each
+// row left-to-right (by x), reconstructing the on-page reading order the way
+// a human would read the voucher, regardless of the raw extraction order.
+function reconstructLines(items) {
+  const rows = [];
+  const TOL = 2.5;
+  for (const item of items) {
+    const x = item.transform[4];
+    const y = item.transform[5];
+    let row = rows.find(r => Math.abs(r.y - y) <= TOL);
+    if (!row) { row = { y, items: [] }; rows.push(row); }
+    row.items.push({ x, str: item.str });
+  }
+  rows.sort((a, b) => b.y - a.y);
+  return rows.map(r => r.items.sort((a, b) => a.x - b.x).map(i => i.str).join(' ').replace(/\s+/g, ' ').trim());
+}
+
+function extractBeneficiaryName(lines) {
+  // Primary pattern seen on Kotak CMS/VPAY vouchers: the "Beneficiary Code"
+  // and "Name" fields sit on the same visual row, e.g.
+  // "Beneficiary Code :        Name  : Kumar Prafull"
+  for (const line of lines) {
+    const m = line.match(/Beneficiary\s*Code\s*:.*?\bName\s*:\s*(.+)/i);
+    if (m) {
+      const name = m[1].replace(/[:\s]+$/, '').trim();
+      if (name.length > 0) return name;
+    }
+  }
+  // Fallback: any standalone "Name :" line that isn't the "Verified
+  // Beneficiary Name" field or a product/company name line.
+  for (const line of lines) {
+    if (/verified beneficiary/i.test(line)) continue;
+    const m = line.match(/(?:^|\s)Name\s*:\s*(.+)/i);
+    if (m) {
+      const name = m[1].replace(/[:\s]+$/, '').trim();
+      if (name.length > 0) return name;
+    }
+  }
+  return null;
+}
+
+function extractAmount(lines) {
+  // Primary pattern on Kotak CMS/VPAY vouchers: "Amount :3150" sits in the
+  // Instrument Details section, on the same row as "Coll. Branch".
+  for (const line of lines) {
+    const m = line.match(/\bAmount\s*:\s*([\d,]+(?:\.\d+)?)/i);
+    if (m) {
+      const amt = m[1].trim();
+      if (amt.length > 0) return amt;
+    }
+  }
+  return null;
+}
+
+function sanitizeFilename(name) {
+  let s = (name || '').replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim();
+  s = s.replace(/[. ]+$/, ''); // trailing dots/spaces are invalid on Windows
+  if (!s) s = '';
+  if (s.length > 120) s = s.slice(0, 120).trim();
+  return s;
+}
+
+function sanitizeAmount(amount) {
+  // Keep digits and a single decimal point; drop thousands separators and
+  // any stray characters so the amount is filename-safe.
+  let s = (amount || '').replace(/,/g, '').replace(/[^0-9.]/g, '').trim();
+  s = s.replace(/[. ]+$/, '');
+  return s;
+}
+
+function pad(num, width) {
+  return String(num).padStart(width, '0');
+}
+
+function currentFilenameForRow(row, totalPages) {
+  const nameInput = document.getElementById('name-input-' + row.page);
+  const amountInput = document.getElementById('amount-input-' + row.page);
+  const nameVal = nameInput ? nameInput.value : row.extractedName || '';
+  const amountVal = amountInput ? amountInput.value : row.extractedAmount || '';
+  const cleanName = sanitizeFilename(nameVal) || ('Beneficiary_Page' + row.page);
+  const cleanAmount = sanitizeAmount(amountVal);
+  const base = cleanAmount ? `${cleanName}_${cleanAmount}` : cleanName;
+  return base + '.pdf';
+}
+
+async function handleFile(file) {
+  errorBox.hidden = true;
+  resultsWrap.hidden = true;
+  resultsBody.innerHTML = '';
+  fileBytesStore = [];
+
+  if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+    showError('Please choose a PDF file.');
+    return;
+  }
+
+  fileNameEl.textContent = file.name;
+  progressWrap.hidden = false;
+  setProgress(2, 'Reading file…');
+
+  try {
+    const originalBuffer = await file.arrayBuffer();
+    // pdf.js and pdf-lib each need their own copy of the bytes, since pdf.js
+    // may transfer/detach the buffer it's given.
+    const bytesForJs = new Uint8Array(originalBuffer.slice(0));
+    const bytesForLib = new Uint8Array(originalBuffer.slice(0));
+
+    setProgress(6, 'Opening PDF…');
+    const pdfJsDoc = await pdfjsLib.getDocument({ data: bytesForJs }).promise;
+    const pdfLibDoc = await PDFLib.PDFDocument.load(bytesForLib);
+    const numPages = pdfJsDoc.numPages;
+
+    if (numPages === 0) {
+      showError('This PDF has no pages.');
+      progressWrap.hidden = true;
+      return;
+    }
+
+    for (let i = 1; i <= numPages; i++) {
+      const pct = 6 + Math.round((i / numPages) * 90);
+      setProgress(pct, `Processing page ${i} of ${numPages}…`);
+
+      const page = await pdfJsDoc.getPage(i);
+      const content = await page.getTextContent();
+      const lines = reconstructLines(content.items);
+      const extractedName = extractBeneficiaryName(lines);
+      const extractedAmount = extractAmount(lines);
+
+      const newDoc = await PDFLib.PDFDocument.create();
+      const [copiedPage] = await newDoc.copyPages(pdfLibDoc, [i - 1]);
+      newDoc.addPage(copiedPage);
+      const bytes = await newDoc.save();
+
+      fileBytesStore.push({
+        page: i,
+        bytes,
+        extractedName: extractedName || '',
+        extractedAmount: extractedAmount || '',
+        needsReview: !extractedName || !extractedAmount
+      });
+
+      // Yield to the browser so the progress bar/UI stays responsive.
+      await new Promise(r => setTimeout(r, 0));
+    }
+
+    setProgress(100, 'Done!');
+    renderResults(numPages);
+    setTimeout(() => { progressWrap.hidden = true; }, 600);
+  } catch (err) {
+    console.error(err);
+    showError('Something went wrong reading this PDF: ' + err.message + '. Try a different file, or let the person who built this tool know the format so it can be adjusted.');
+    progressWrap.hidden = true;
+  }
+}
+
+function renderResults(numPages) {
+  resultsWrap.hidden = false;
+  const reviewCount = fileBytesStore.filter(r => r.needsReview).length;
+  statsText.innerHTML = `<strong>${numPages}</strong> pages split &middot; ` +
+    (reviewCount === 0
+      ? `<span style="color:#2f7d4f;">all names &amp; amounts extracted</span>`
+      : `<strong style="color:#8a6d1d;">${reviewCount}</strong> need a name or amount filled in manually`);
+
+  resultsBody.innerHTML = '';
+  for (const row of fileBytesStore) {
+    const tr = document.createElement('tr');
+    if (row.needsReview) tr.className = 'needs-review';
+
+    const tdPage = document.createElement('td');
+    tdPage.className = 'page-num';
+    tdPage.textContent = row.page;
+
+    const tdName = document.createElement('td');
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.className = 'name-input';
+    nameInput.id = 'name-input-' + row.page;
+    nameInput.value = row.extractedName || '';
+    nameInput.placeholder = 'Enter beneficiary name…';
+    tdName.appendChild(nameInput);
+    const previewEl = document.createElement('div');
+    previewEl.className = 'filename-preview';
+    tdName.appendChild(previewEl);
+
+    const tdAmount = document.createElement('td');
+    tdAmount.className = 'amount-col';
+    const amountInput = document.createElement('input');
+    amountInput.type = 'text';
+    amountInput.className = 'amount-input';
+    amountInput.id = 'amount-input-' + row.page;
+    amountInput.value = row.extractedAmount || '';
+    amountInput.placeholder = 'Amount…';
+    tdAmount.appendChild(amountInput);
+
+    const updatePreview = () => {
+      previewEl.textContent = currentFilenameForRow(row, numPages);
+    };
+    nameInput.addEventListener('input', updatePreview);
+    amountInput.addEventListener('input', updatePreview);
+    updatePreview();
+
+    const tdFlag = document.createElement('td');
+    tdFlag.innerHTML = row.needsReview
+      ? '<span class="flag">⚠ check</span>'
+      : '<span class="flag-ok">✓</span>';
+
+    const tdDl = document.createElement('td');
+    tdDl.className = 'dl-col';
+    const btn = document.createElement('button');
+    btn.className = 'btn small secondary';
+    btn.textContent = 'Download';
+    btn.addEventListener('click', () => {
+      const filename = currentFilenameForRow(row, numPages);
+      const blob = new Blob([row.bytes], { type: 'application/pdf' });
+      saveAs(blob, filename);
+    });
+    tdDl.appendChild(btn);
+
+    tr.appendChild(tdPage);
+    tr.appendChild(tdName);
+    tr.appendChild(tdAmount);
+    tr.appendChild(tdFlag);
+    tr.appendChild(tdDl);
+    resultsBody.appendChild(tr);
+  }
+}
+
+downloadZipBtn.addEventListener('click', async () => {
+  if (!fileBytesStore.length) return;
+  downloadZipBtn.disabled = true;
+  const originalText = downloadZipBtn.textContent;
+  downloadZipBtn.textContent = 'Zipping…';
+  try {
+    const zip = new JSZip();
+    const usedNames = new Set();
+    for (const row of fileBytesStore) {
+      let filename = currentFilenameForRow(row, fileBytesStore.length);
+      // guard against accidental exact duplicate filenames
+      let finalName = filename;
+      let n = 2;
+      while (usedNames.has(finalName)) {
+        finalName = filename.replace(/\.pdf$/, '') + ` (${n}).pdf`;
+        n++;
+      }
+      usedNames.add(finalName);
+      zip.file(finalName, row.bytes);
+    }
+    const blob = await zip.generateAsync({ type: 'blob' });
+    saveAs(blob, 'beneficiary_vouchers.zip');
+  } catch (err) {
+    console.error(err);
+    showError('Could not build the ZIP: ' + err.message);
+  } finally {
+    downloadZipBtn.disabled = false;
+    downloadZipBtn.textContent = originalText;
+  }
+});
+</script>
+</body>
+</html>
